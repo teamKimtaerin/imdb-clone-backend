@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 
-const userRoutes = require('./routes/user.routes');
+const reviewRoutes = require('./routes/review.routes');
 
 const app = express();
 
@@ -10,7 +10,6 @@ app.use(cors());
 app.use(express.json());
 
 // 라우터 등록
-app.use('/api/users', userRoutes);
+app.use('/api/reviews', reviewRoutes);
 
 module.exports = app;
-
