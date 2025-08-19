@@ -5,11 +5,9 @@ exports.getReviewsByMovieId = async (req, res) => {
         const { movieId } = req.params;
         const reviews = await Review.find({ "movie.movie_id": movieId });
 
-        const total = await Review.countDocuments({ movie_id: movieId });
-
         res.json({
             reviews,
-            totalReviews: total
+            totalReviews: reviews.length
         });
     } catch (err) {
         res.status(500).json({ error: err.message });

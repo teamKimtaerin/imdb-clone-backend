@@ -15,10 +15,8 @@ const reviewSchema = new mongoose.Schema({
         movie_id: mongoose.Schema.Types.ObjectId,
         release_date: Date,
         running_time: Number
-    },
-
-    created_at: { type: Date, default: Date.now }
-});
+    }
+}, { timestamps: true });
 
 const Review = mongoose.model('Review', reviewSchema);
 module.exports = Review;
