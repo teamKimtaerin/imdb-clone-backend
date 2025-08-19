@@ -21,5 +21,54 @@ const movieSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 
+movieSchema.statics.createMovie = async function(movieData) {
+  try {
+    const movie = new this(movieData);
+    return await movie.save();
+  } catch (error) {
+    throw error;
+  }
+};
+
+movieSchema.statics.updateMovie = async function(id, updateData) {
+  try {
+    return await this.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+  } catch (error) {
+    throw error;
+  }
+};
+
+movieSchema.statics.deleteMovie = async function(id) {
+  try {
+    return await this.findByIdAndDelete(id);
+  } catch (error) {
+    throw error;
+  }
+};
+
+movieSchema.statics.getMovieByTitle = async function(title) {
+  try {
+    return await this.find({ title: { $regex: title, $options: 'i' } }).sort({ created_at: -1 });
+  } catch (error) {
+    throw error;
+  }
+};
+
+movieSchema.statics.getMovieByCategories = async function(categories) {
+  try {
+    return await this.find({ categories: { $in: categories } }).sort({ created_at: -1 });
+  } catch (error) {
+    throw error;
+  }
+};
+
+movieSchema.statics.getMovieByRecent = async function(limit = 10) {
+  try {
+    return await this.find().sort({ created_at: -1 }).limit(limit);
+  } catch (error) {
+    throw error;
+  }
+};
+
 const Movie = mongoose.model('Movie', movieSchema);
 module.exports = Movie;
