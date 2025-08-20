@@ -16,6 +16,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// 요청 로깅 미들웨어 추가
+app.use((req, res, next) => {
+    console.log(`📝 ${req.method} ${req.url} - ${new Date().toISOString()}`);
+    next();
+});
+
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // 라우터 등록
@@ -34,6 +40,7 @@ app.get('/', (req, res) => {
 })
 
 app.use((req, res, next) => {
+    console.log(`❌ 404 Not Found: ${req.method} ${req.url}`);
     res.status(404).send({error: 'Not Found'});
 })
 
