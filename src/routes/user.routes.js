@@ -1,6 +1,6 @@
 const express = require('express');
 const { register, login, getProfile } = require('../controllers/auth.controller');
-const authMiddleware = require('../middleware/auth.middleware');
+const { verifyToken } = require('../middleware/auth.middleware');
 const router = express.Router();
 
 /**
@@ -89,6 +89,6 @@ router.post('/login', login);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/profile', authMiddleware, getProfile);
+router.get('/profile', verifyToken, getProfile);
 
 module.exports = router;

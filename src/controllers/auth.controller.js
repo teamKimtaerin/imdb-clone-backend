@@ -1,60 +1,109 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/user.model');
+const crypto = require('crypto');
+const User = require('../models/User');
+const EmailVerification = require('../models/EmailVerification');
+const { validateRegistrationData, validateLoginData, sanitizeInput } = require('../utils/validation');
+const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/emailService');
 
-const generateToken = (userId) => {
-    return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
+const generateAccessToken = (userId) => {
+    return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '15m' });
+};
+
+const generateRefreshToken = (userId) => {
+    return jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
+};
+
+const generateVerificationCode = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
 const register = async (req, res) => {
     try {
         const {username, email, password, nickname} = req.body;
 
-        if(!username || !email || !password || !nickname) {
+        if(!username || !email || !password) {
             return res.status(400).json({
                 success: false,
-                message: '모든 필드를 입력해주세요.'
+                message: 'All fields are required'
             });
         }
+        
+        const validation = validateRegistrationData({ username, email, password });
+        if (!validation.isValid) {
+            return res.status(400).json({
+                success: false,
+                message: validation.errors[0]
+            });
+        }
+        
+        // Check if email has been verified
+        const verification = await EmailVerification.findOne({ 
+            email, 
+            isVerified: true 
+        });
+        
+        if (!verification) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email not verified. Please verify your email first.'
+            });
+        }
+        
         const existingUser = await User.findOne({$or: [{email}, {username}]});
     
         if(existingUser) {
+            if (existingUser.email === email) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Email already exists'
+                });
+            }
             return res.status(400).json({
                 success: false,
-                message: '이미 사용중인 이메일 또는 사용자 이름입니다.'
+                message: 'Username already taken'
             });
         }
-
+        
         const user = new User({
             username,
+            nickname: nickname || username, // Use username as default if nickname not provided
             email,
             password,
-            nickname
+            isEmailVerified: true // Already verified through the verification flow
         });
 
         await user.save();
 
-        const token = generateToken(user._id);
+        const accessToken = generateAccessToken(user._id);
+        const refreshToken = generateRefreshToken(user._id);
+        
+        user.refreshToken = refreshToken;
+        await user.save();
+        
+        // Clean up verification record
+        await EmailVerification.deleteOne({ email });
 
         res.status(201).json({
             success: true,
-            message: '회원가입 성공',
+            message: 'Registration successful',
             data: {
-                token,
+                accessToken,
+                refreshToken,
                 user : {
                     id: user._id,
                     username: user.username,
-                    email: user.email,
                     nickname: user.nickname,
-                    profileImage: user.profileImage
+                    email: user.email,
+                    isEmailVerified: user.isEmailVerified
                 }
             }
         })
     } catch (error) {
-        console.error('회원가입 오류:', error);
+        console.error('Registration error:', error);
         res.status(500).json({
             success: false,
-            message: '회원가입 중 오류가 발생했습니다.',
-            error: error.message
+            message: 'Registration failed',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 }
@@ -63,62 +112,62 @@ const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // 필수 필드 확인
     if (!email || !password) {
       return res.status(400).json({
         success: false,
-        message: '이메일과 비밀번호를 입력해주세요'
+        message: 'Email and password are required'
       });
     }
+    
+    const validation = validateLoginData({ email, password });
+    if (!validation.isValid) {
+        return res.status(400).json({
+            success: false,
+            message: validation.errors[0]
+        });
+    }
 
-    // 사용자 찾기 (비밀번호 포함)
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ email });
     
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: '이메일 또는 비밀번호가 잘못되었습니다'
+        message: 'Invalid email or password'
       });
     }
 
-    // 계정 활성화 확인
-    if (!user.isActive) {
+    if (!user.isEmailVerified) {
       return res.status(401).json({
         success: false,
-        message: '비활성화된 계정입니다'
+        message: 'Please verify your email before logging in'
       });
     }
 
-    // 비밀번호 검증
     const isPasswordValid = await user.comparePassword(password);
     
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
-        message: '이메일 또는 비밀번호가 잘못되었습니다'
+        message: 'Invalid email or password'
       });
     }
 
-    // 마지막 로그인 시간 업데이트
-    user.lastLoginAt = new Date();
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
+    
+    user.refreshToken = refreshToken;
     await user.save();
-
-    // JWT 토큰 생성
-    const token = generateToken(user._id);
 
     res.json({
       success: true,
-      message: '로그인 성공',
+      message: 'Login successful',
       data: {
-        token,
+        accessToken,
+        refreshToken,
         user: {
           id: user._id,
           username: user.username,
-          email: user.email,
-          nickname: user.nickname,
-          profileImage: user.profileImage,
-          preferences: user.preferences,
-          recentSearches: user.recentSearches
+          email: user.email
         }
       }
     });
@@ -127,20 +176,63 @@ const login = async (req, res) => {
     console.error('Login error:', error);
     res.status(500).json({
       success: false,
-      message: '서버 오류가 발생했습니다',
-      error: error.message
+      message: 'Login failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
 
+const refreshAccessToken = async (req, res) => {
+    try {
+        const { refreshToken } = req.body;
+        
+        if (!refreshToken) {
+            return res.status(401).json({
+                success: false,
+                message: 'Refresh token required'
+            });
+        }
+        
+        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        const user = await User.findById(decoded.userId);
+        
+        if (!user || user.refreshToken !== refreshToken) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid refresh token'
+            });
+        }
+        
+        const newAccessToken = generateAccessToken(user._id);
+        const newRefreshToken = generateRefreshToken(user._id);
+        
+        user.refreshToken = newRefreshToken;
+        await user.save();
+        
+        res.json({
+            success: true,
+            data: {
+                accessToken: newAccessToken,
+                refreshToken: newRefreshToken
+            }
+        });
+    } catch (error) {
+        console.error('Token refresh error:', error);
+        res.status(401).json({
+            success: false,
+            message: 'Token refresh failed'
+        });
+    }
+};
+
 const getProfile = async (req, res) => {
     try {
-        const user = await User.findById(req.userId);
+        const user = await User.findById(req.user._id).select('-password -refreshToken');
 
         if(!user) {
             return res.status(404).json({
                 success: false,
-                message: '사용자를 찾을 수 없습니다.'
+                message: 'User not found'
             });
         }
 
@@ -152,14 +244,231 @@ const getProfile = async (req, res) => {
         console.error('Get profile error:', error);
         res.status(500).json({
             success: false,
-            message: '프로필을 가져오는 중 오류가 발생했습니다.',
-            error: error.message
+            message: 'Failed to get profile',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 }
 
+const verifyEmailCode = async (req, res) => {
+    try {
+        const { email, code } = req.body;
+
+        if (!email || !code) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email and verification code are required'
+            });
+        }
+        
+        // First check in temporary verification storage
+        const verification = await EmailVerification.findOne({
+            email,
+            verificationCode: code,
+            expiresAt: { $gt: Date.now() }
+        });
+        
+        if (verification) {
+            // Mark as verified in temporary storage
+            verification.isVerified = true;
+            await verification.save();
+            
+            return res.json({
+                success: true,
+                message: 'Email verified successfully',
+                data: {
+                    email: email,
+                    verified: true
+                }
+            });
+        }
+        
+        // Fallback: check existing users (for backward compatibility)
+        const user = await User.findOne({
+            email,
+            emailVerificationCode: code,
+            emailVerificationExpires: { $gt: Date.now() }
+        });
+        
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid or expired verification code'
+            });
+        }
+        
+        user.isEmailVerified = true;
+        user.emailVerificationCode = null;
+        user.emailVerificationExpires = null;
+        await user.save();
+        
+        // Generate tokens for automatic login after verification
+        const accessToken = generateAccessToken(user._id);
+        const refreshToken = generateRefreshToken(user._id);
+        
+        user.refreshToken = refreshToken;
+        await user.save();
+        
+        res.json({
+            success: true,
+            message: 'Email verified successfully',
+            data: {
+                accessToken,
+                refreshToken,
+                user: {
+                    id: user._id,
+                    username: user.username,
+                    email: user.email,
+                    isEmailVerified: true
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Email verification error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Email verification failed',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+const resendVerificationEmail = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email is required'
+            });
+        }
+        
+        const user = await User.findOne({ email });
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+        
+        if (user.isEmailVerified) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email already verified'
+            });
+        }
+        
+        const verificationCode = generateVerificationCode();
+        const verificationExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+        
+        user.emailVerificationCode = verificationCode;
+        user.emailVerificationExpires = verificationExpires;
+        await user.save();
+        
+        await sendVerificationEmail(email, verificationCode);
+        
+        res.json({
+            success: true,
+            message: 'Verification email sent'
+        });
+
+    } catch (error) {
+        console.error('Resend verification error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to resend verification email',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+// Frontend-compatible endpoint for sending verification to unregistered emails
+const sendEmailVerification = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email is required'
+            });
+        }
+        
+        // Check if user already exists
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(409).json({
+                success: false,
+                message: 'Email already registered'
+            });
+        }
+        
+        // Generate verification code for new email
+        const verificationCode = generateVerificationCode();
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+        
+        // Store in temporary verification collection
+        await EmailVerification.findOneAndUpdate(
+            { email },
+            {
+                email,
+                verificationCode,
+                isVerified: false,
+                expiresAt
+            },
+            { upsert: true, new: true }
+        );
+        
+        // Send verification email
+        await sendVerificationEmail(email, verificationCode);
+        
+        res.json({
+            success: true,
+            message: 'Verification email sent'
+        });
+
+    } catch (error) {
+        console.error('Send verification error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to send verification email',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+const logout = async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        if (user) {
+            user.refreshToken = null;
+            await user.save();
+        }
+        
+        res.json({
+            success: true,
+            message: 'Logged out successfully'
+        });
+    } catch (error) {
+        console.error('Logout error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Logout failed'
+        });
+    }
+};
+
+
 module.exports = {
     register,
     login,
-    getProfile
+    logout,
+    refreshAccessToken,
+    getProfile,
+    verifyEmailCode,
+    resendVerificationEmail,
+    sendEmailVerification
 }

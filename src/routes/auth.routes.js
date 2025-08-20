@@ -1,6 +1,15 @@
 const express = require('express');
-const { register, login, getProfile } = require('../controllers/auth.controller');
-const authMiddleware = require('../middleware/auth.middleware');
+const { 
+    register, 
+    login, 
+    logout,
+    refreshAccessToken,
+    getProfile, 
+    verifyEmailCode, 
+    resendVerificationEmail,
+    sendEmailVerification
+} = require('../controllers/auth.controller');
+const { verifyToken, verifyRefreshToken } = require('../middleware/auth.middleware');
 
 const router = express.Router();
 
@@ -90,6 +99,130 @@ router.post('/login', login);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/profile', authMiddleware, getProfile);
+router.get('/profile', verifyToken, getProfile);
+
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: 로그아웃
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 로그아웃 성공
+ */
+router.post('/logout', verifyToken, logout);
+
+/**
+ * @swagger
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Refresh access token
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - refreshToken
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Token refreshed successfully
+ *       401:
+ *         description: Invalid refresh token
+ */
+router.post('/refresh', refreshAccessToken);
+
+/**
+ * @swagger
+ * /api/auth/verify-code:
+ *   post:
+ *     summary: Verify email with code
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - code
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               code:
+ *                 type: string
+ *                 minLength: 6
+ *                 maxLength: 6
+ *     responses:
+ *       200:
+ *         description: Email verified successfully, returns tokens
+ *       400:
+ *         description: Invalid or expired code
+ */
+router.post('/verify-code', verifyEmailCode);
+
+/**
+ * @swagger
+ * /api/auth/resend-verification:
+ *   post:
+ *     summary: Resend email verification
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Verification email sent
+ *       400:
+ *         description: Email already verified
+ *       404:
+ *         description: User not found
+ */
+router.post('/resend-verification', resendVerificationEmail);
+
+/**
+ * @swagger
+ * /api/auth/send-verification:
+ *   post:
+ *     summary: Send email verification (legacy endpoint)
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Verification status
+ *       409:
+ *         description: Email already registered
+ */
+router.post('/send-verification', sendEmailVerification);
 
 module.exports = router;
