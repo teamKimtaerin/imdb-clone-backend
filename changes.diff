@@ -1,0 +1,615 @@
+diff --git a/.env.example b/.env.example
+new file mode 100644
+index 0000000..e72b021
+--- /dev/null
++++ b/.env.example
+@@ -0,0 +1,12 @@
++# MongoDB 연결 URI
++MONGODB_URI=mongodb://localhost:27017/imdb_clone
++
++# JWT 시크릿 키
++JWT_SECRET=7472ac6d9af1eee99765ef9cbe66957e4f6b21038d7f63f28eb11af3d945d065
++
++# TMDB API 키 (영화 데이터 크롤링용)
++# https://www.themoviedb.org/settings/api 에서 발급받으세요
++TMDB_API_KEY=989cb5a8766197abe3cecda6523470ba
++
++# 서버 포트
++PORT=4000
+\ No newline at end of file
+diff --git a/package-lock.json b/package-lock.json
+index 8df61c6..0cba541 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,16 +1,17 @@
+ {
+-  "name": "imdb-clone-backend",
++  "name": "backend",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "dependencies": {
++        "axios": "^1.11.0",
+         "bcryptjs": "^3.0.2",
+         "cors": "^2.8.5",
+         "dotenv": "^17.2.1",
+         "express": "^5.1.0",
+         "jsonwebtoken": "^9.0.2",
+-        "mongoose": "^8.17.1",
++        "mongoose": "^8.17.2",
+         "swagger-jsdoc": "^6.2.8",
+         "swagger-ui-express": "^5.0.1"
+       },
+@@ -138,6 +139,23 @@
+       "integrity": "sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==",
+       "license": "Python-2.0"
+     },
++    "node_modules/asynckit": {
++      "version": "0.4.0",
++      "resolved": "https://registry.npmjs.org/asynckit/-/asynckit-0.4.0.tgz",
++      "integrity": "sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q==",
++      "license": "MIT"
++    },
++    "node_modules/axios": {
++      "version": "1.11.0",
++      "resolved": "https://registry.npmjs.org/axios/-/axios-1.11.0.tgz",
++      "integrity": "sha512-1Lx3WLFQWm3ooKDYZD1eXmoGO9fxYQjrycfHFC8P0sCfQVXyROp0p9PFWBehewBOdCwHc+f/b8I0fMto5eSfwA==",
++      "license": "MIT",
++      "dependencies": {
++        "follow-redirects": "^1.15.6",
++        "form-data": "^4.0.4",
++        "proxy-from-env": "^1.1.0"
++      }
++    },
+     "node_modules/balanced-match": {
+       "version": "1.0.2",
+       "resolved": "https://registry.npmjs.org/balanced-match/-/balanced-match-1.0.2.tgz",
+@@ -293,6 +311,18 @@
+         "fsevents": "~2.3.2"
+       }
+     },
++    "node_modules/combined-stream": {
++      "version": "1.0.8",
++      "resolved": "https://registry.npmjs.org/combined-stream/-/combined-stream-1.0.8.tgz",
++      "integrity": "sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==",
++      "license": "MIT",
++      "dependencies": {
++        "delayed-stream": "~1.0.0"
++      },
++      "engines": {
++        "node": ">= 0.8"
++      }
++    },
+     "node_modules/commander": {
+       "version": "6.2.0",
+       "resolved": "https://registry.npmjs.org/commander/-/commander-6.2.0.tgz",
+@@ -377,6 +407,15 @@
+         }
+       }
+     },
++    "node_modules/delayed-stream": {
++      "version": "1.0.0",
++      "resolved": "https://registry.npmjs.org/delayed-stream/-/delayed-stream-1.0.0.tgz",
++      "integrity": "sha512-ZySD7Nf91aLB0RxL4KGrKHBXl7Eds1DAmEdcoVawXnLD7SDhpNgtuII2aAkg7a7QS41jxPSZ17p4VdGnMHk3MQ==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=0.4.0"
++      }
++    },
+     "node_modules/depd": {
+       "version": "2.0.0",
+       "resolved": "https://registry.npmjs.org/depd/-/depd-2.0.0.tgz",
+@@ -478,6 +517,21 @@
+         "node": ">= 0.4"
+       }
+     },
++    "node_modules/es-set-tostringtag": {
++      "version": "2.1.0",
++      "resolved": "https://registry.npmjs.org/es-set-tostringtag/-/es-set-tostringtag-2.1.0.tgz",
++      "integrity": "sha512-j6vWzfrGVfyXxge+O0x5sh6cvxAog0a/4Rdd2K36zCMV5eJ+/+tOAngRO8cODMNWbVRdVlmGZQL2YS3yR8bIUA==",
++      "license": "MIT",
++      "dependencies": {
++        "es-errors": "^1.3.0",
++        "get-intrinsic": "^1.2.6",
++        "has-tostringtag": "^1.0.2",
++        "hasown": "^2.0.2"
++      },
++      "engines": {
++        "node": ">= 0.4"
++      }
++    },
+     "node_modules/escape-html": {
+       "version": "1.0.3",
+       "resolved": "https://registry.npmjs.org/escape-html/-/escape-html-1.0.3.tgz",
+@@ -574,6 +628,63 @@
+         "node": ">= 0.8"
+       }
+     },
++    "node_modules/follow-redirects": {
++      "version": "1.15.11",
++      "resolved": "https://registry.npmjs.org/follow-redirects/-/follow-redirects-1.15.11.tgz",
++      "integrity": "sha512-deG2P0JfjrTxl50XGCDyfI97ZGVCxIpfKYmfyrQ54n5FO/0gfIES8C/Psl6kWVDolizcaaxZJnTS0QSMxvnsBQ==",
++      "funding": [
++        {
++          "type": "individual",
++          "url": "https://github.com/sponsors/RubenVerborgh"
++        }
++      ],
++      "license": "MIT",
++      "engines": {
++        "node": ">=4.0"
++      },
++      "peerDependenciesMeta": {
++        "debug": {
++          "optional": true
++        }
++      }
++    },
++    "node_modules/form-data": {
++      "version": "4.0.4",
++      "resolved": "https://registry.npmjs.org/form-data/-/form-data-4.0.4.tgz",
++      "integrity": "sha512-KrGhL9Q4zjj0kiUt5OO4Mr/A/jlI2jDYs5eHBpYHPcBEVSiipAvn2Ko2HnPe20rmcuuvMHNdZFp+4IlGTMF0Ow==",
++      "license": "MIT",
++      "dependencies": {
++        "asynckit": "^0.4.0",
++        "combined-stream": "^1.0.8",
++        "es-set-tostringtag": "^2.1.0",
++        "hasown": "^2.0.2",
++        "mime-types": "^2.1.12"
++      },
++      "engines": {
++        "node": ">= 6"
++      }
++    },
++    "node_modules/form-data/node_modules/mime-db": {
++      "version": "1.52.0",
++      "resolved": "https://registry.npmjs.org/mime-db/-/mime-db-1.52.0.tgz",
++      "integrity": "sha512-sPU4uV7dYlvtWJxwwxHD0PuihVNiE7TyAbQ5SWxDCB9mUYvOgroQOwYQQOKPJ8CIbE+1ETVlOoK1UC2nU3gYvg==",
++      "license": "MIT",
++      "engines": {
++        "node": ">= 0.6"
++      }
++    },
++    "node_modules/form-data/node_modules/mime-types": {
++      "version": "2.1.35",
++      "resolved": "https://registry.npmjs.org/mime-types/-/mime-types-2.1.35.tgz",
++      "integrity": "sha512-ZDY+bPm5zTTF+YpCrAU9nK0UgICYPT0QtT1NZWFv4s++TNkcgVaT0g6+4R2uI4MjQjzysHB1zxuWL50hzaeXiw==",
++      "license": "MIT",
++      "dependencies": {
++        "mime-db": "1.52.0"
++      },
++      "engines": {
++        "node": ">= 0.6"
++      }
++    },
+     "node_modules/forwarded": {
+       "version": "0.2.0",
+       "resolved": "https://registry.npmjs.org/forwarded/-/forwarded-0.2.0.tgz",
+@@ -727,6 +838,21 @@
+         "url": "https://github.com/sponsors/ljharb"
+       }
+     },
++    "node_modules/has-tostringtag": {
++      "version": "1.0.2",
++      "resolved": "https://registry.npmjs.org/has-tostringtag/-/has-tostringtag-1.0.2.tgz",
++      "integrity": "sha512-NqADB8VjPFLM2V0VvHUewwwsw0ZWBaIdgo+ieHtK3hasLz4qeCRjYcqfB6AQrBggRKppKF8L52/VqdVsO47Dlw==",
++      "license": "MIT",
++      "dependencies": {
++        "has-symbols": "^1.0.3"
++      },
++      "engines": {
++        "node": ">= 0.4"
++      },
++      "funding": {
++        "url": "https://github.com/sponsors/ljharb"
++      }
++    },
+     "node_modules/hasown": {
+       "version": "2.0.2",
+       "resolved": "https://registry.npmjs.org/hasown/-/hasown-2.0.2.tgz",
+@@ -1113,9 +1239,9 @@
+       }
+     },
+     "node_modules/mongoose": {
+-      "version": "8.17.1",
+-      "resolved": "https://registry.npmjs.org/mongoose/-/mongoose-8.17.1.tgz",
+-      "integrity": "sha512-aodS4cacux5caoxB5ErEwRmrafIUsVRJxHnvP7URnSUnTenr32j1qBVV+KjYxryyLSisQkxglAFF69TNLeZTLg==",
++      "version": "8.17.2",
++      "resolved": "https://registry.npmjs.org/mongoose/-/mongoose-8.17.2.tgz",
++      "integrity": "sha512-zp0xzzphKZrr9azDayn0w08gp0jzeZO8EQKvCKNd6c1I/Y9PRmTKj7x+60IWF3+DKmqWq7WZ4ihDEvOFUtWkSA==",
+       "license": "MIT",
+       "dependencies": {
+         "bson": "^6.10.4",
+@@ -1311,6 +1437,12 @@
+         "node": ">= 0.10"
+       }
+     },
++    "node_modules/proxy-from-env": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/proxy-from-env/-/proxy-from-env-1.1.0.tgz",
++      "integrity": "sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg==",
++      "license": "MIT"
++    },
+     "node_modules/pstree.remy": {
+       "version": "1.1.8",
+       "resolved": "https://registry.npmjs.org/pstree.remy/-/pstree.remy-1.1.8.tgz",
+diff --git a/package.json b/package.json
+index ab1d70f..ad7b321 100644
+--- a/package.json
++++ b/package.json
+@@ -1,17 +1,19 @@
+ {
+   "dependencies": {
++    "axios": "^1.11.0",
+     "bcryptjs": "^3.0.2",
+     "cors": "^2.8.5",
+     "dotenv": "^17.2.1",
+     "express": "^5.1.0",
+     "jsonwebtoken": "^9.0.2",
+-    "mongoose": "^8.17.1",
++    "mongoose": "^8.17.2",
+     "swagger-jsdoc": "^6.2.8",
+     "swagger-ui-express": "^5.0.1"
+   },
+   "scripts": {
+     "start": "node src/server.js",
+-    "dev": "nodemon src/server.js"
++    "dev": "nodemon src/server.js",
++    "crawl": "node src/scripts/crawlMovies.js"
+   },
+   "devDependencies": {
+     "nodemon": "^3.1.10"
+diff --git a/src/controllers/movie.controller.js b/src/controllers/movie.controller.js
+index a20114c..9249e7e 100644
+--- a/src/controllers/movie.controller.js
++++ b/src/controllers/movie.controller.js
+@@ -1,5 +1,44 @@
+ const Movie = require('../models/movie.model');
+ 
++exports.createMovie = async (req, res) => {
++    try {
++        const movie = await Movie.createMovie(req.body);
++        res.status(201).json(movie);
++    } catch (err) {
++        res.status(400).json({ message: err.message });
++    }
++};
++
++exports.updateMovie = async (req, res) => {
++    try {
++        const { id } = req.params;
++        const movie = await Movie.updateMovie(id, req.body);
++        
++        if (!movie) {
++            return res.status(404).json({ message: 'Movie not found' });
++        }
++        
++        res.json(movie);
++    } catch (err) {
++        res.status(400).json({ message: err.message });
++    }
++};
++
++exports.deleteMovie = async (req, res) => {
++    try {
++        const { id } = req.params;
++        const movie = await Movie.deleteMovie(id);
++        
++        if (!movie) {
++            return res.status(404).json({ message: 'Movie not found' });
++        }
++        
++        res.json({ message: 'Movie deleted successfully' });
++    } catch (err) {
++        res.status(500).json({ message: err.message });
++    }
++};
++
+ exports.getMovieById = async (req, res) => {
+     try {
+         const { id } = req.params;
+@@ -13,4 +52,45 @@ exports.getMovieById = async (req, res) => {
+     } catch (err) {
+         res.status(500).json({ message: err.message });
+     }
++};
++
++exports.getMovieByTitle = async (req, res) => {
++    try {
++        const { title } = req.query;
++        
++        if (!title) {
++            return res.status(400).json({ message: 'Title parameter is required' });
++        }
++        
++        const movies = await Movie.getMovieByTitle(title);
++        res.json(movies);
++    } catch (err) {
++        res.status(500).json({ message: err.message });
++    }
++};
++
++exports.getMovieByCategories = async (req, res) => {
++    try {
++        const { categories } = req.query;
++        
++        if (!categories) {
++            return res.status(400).json({ message: 'Categories parameter is required' });
++        }
++        
++        const categoriesArray = Array.isArray(categories) ? categories : categories.split(',');
++        const movies = await Movie.getMovieByCategories(categoriesArray);
++        res.json(movies);
++    } catch (err) {
++        res.status(500).json({ message: err.message });
++    }
++};
++
++exports.getMovieByRecent = async (req, res) => {
++    try {
++        const { limit } = req.query;
++        const movies = await Movie.getMovieByRecent(limit ? parseInt(limit) : 10);
++        res.json(movies);
++    } catch (err) {
++        res.status(500).json({ message: err.message });
++    }
+ };
+\ No newline at end of file
+diff --git a/src/models/movie.model.js b/src/models/movie.model.js
+index 86c27fe..426e2bd 100644
+--- a/src/models/movie.model.js
++++ b/src/models/movie.model.js
+@@ -21,5 +21,54 @@ const movieSchema = new mongoose.Schema({
+   created_at: { type: Date, default: Date.now }
+ });
+ 
++movieSchema.statics.createMovie = async function(movieData) {
++  try {
++    const movie = new this(movieData);
++    return await movie.save();
++  } catch (error) {
++    throw error;
++  }
++};
++
++movieSchema.statics.updateMovie = async function(id, updateData) {
++  try {
++    return await this.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
++  } catch (error) {
++    throw error;
++  }
++};
++
++movieSchema.statics.deleteMovie = async function(id) {
++  try {
++    return await this.findByIdAndDelete(id);
++  } catch (error) {
++    throw error;
++  }
++};
++
++movieSchema.statics.getMovieByTitle = async function(title) {
++  try {
++    return await this.find({ title: { $regex: title, $options: 'i' } }).sort({ created_at: -1 });
++  } catch (error) {
++    throw error;
++  }
++};
++
++movieSchema.statics.getMovieByCategories = async function(categories) {
++  try {
++    return await this.find({ categories: { $in: categories } }).sort({ created_at: -1 });
++  } catch (error) {
++    throw error;
++  }
++};
++
++movieSchema.statics.getMovieByRecent = async function(limit = 10) {
++  try {
++    return await this.find().sort({ created_at: -1 }).limit(limit);
++  } catch (error) {
++    throw error;
++  }
++};
++
+ const Movie = mongoose.model('Movie', movieSchema);
+ module.exports = Movie;
+diff --git a/src/routes/movie.routes.js b/src/routes/movie.routes.js
+index 7b17e17..77da54c 100644
+--- a/src/routes/movie.routes.js
++++ b/src/routes/movie.routes.js
+@@ -2,6 +2,12 @@ const express = require('express');
+ const router = express.Router();
+ const movieController = require('../controllers/movie.controller');
+ 
++router.post('/', movieController.createMovie);
++router.put('/:id', movieController.updateMovie);
++router.delete('/:id', movieController.deleteMovie);
++router.get('/search/title', movieController.getMovieByTitle);
++router.get('/search/categories', movieController.getMovieByCategories);
++router.get('/recent', movieController.getMovieByRecent);
+ router.get('/:id', movieController.getMovieById);
+ 
+ module.exports = router;
+\ No newline at end of file
+diff --git a/src/scripts/crawlMovies.js b/src/scripts/crawlMovies.js
+new file mode 100644
+index 0000000..d3bd963
+--- /dev/null
++++ b/src/scripts/crawlMovies.js
+@@ -0,0 +1,173 @@
++require('dotenv').config();
++const axios = require('axios');
++const mongoose = require('mongoose');
++const Movie = require('../models/movie.model');
++
++const TMDB_API_KEY = process.env.TMDB_API_KEY || 'YOUR_TMDB_API_KEY';
++const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
++const TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500';
++
++async function connectDB() {
++    try {
++        await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/imdb_clone');
++        console.log('MongoDB 연결 성공');
++    } catch (error) {
++        console.error('MongoDB 연결 실패:', error);
++        process.exit(1);
++    }
++}
++
++async function getPopularMovies(page = 1) {
++    try {
++        const response = await axios.get(`${TMDB_BASE_URL}/movie/popular`, {
++            params: {
++                api_key: TMDB_API_KEY,
++                language: 'ko-KR',
++                page: page
++            }
++        });
++        return response.data.results;
++    } catch (error) {
++        console.error('인기 영화 데이터 가져오기 실패:', error.message);
++        return [];
++    }
++}
++
++async function getMovieDetails(movieId) {
++    try {
++        const [movieResponse, creditsResponse, videosResponse] = await Promise.all([
++            axios.get(`${TMDB_BASE_URL}/movie/${movieId}`, {
++                params: {
++                    api_key: TMDB_API_KEY,
++                    language: 'ko-KR'
++                }
++            }),
++            axios.get(`${TMDB_BASE_URL}/movie/${movieId}/credits`, {
++                params: {
++                    api_key: TMDB_API_KEY,
++                    language: 'ko-KR'
++                }
++            }),
++            axios.get(`${TMDB_BASE_URL}/movie/${movieId}/videos`, {
++                params: {
++                    api_key: TMDB_API_KEY,
++                    language: 'ko-KR'
++                }
++            })
++        ]);
++
++        return {
++            movie: movieResponse.data,
++            credits: creditsResponse.data,
++            videos: videosResponse.data
++        };
++    } catch (error) {
++        console.error(`영화 ID ${movieId} 상세 정보 가져오기 실패:`, error.message);
++        return null;
++    }
++}
++
++function transformMovieData(movieData) {
++    const { movie, credits, videos } = movieData;
++    
++    const trailer = videos.results.find(video => 
++        video.type === 'Trailer' && video.site === 'YouTube'
++    );
++    
++    const director = credits.crew.find(person => person.job === 'Director');
++    
++    const cast = credits.cast.slice(0, 10).map(actor => ({
++        name: actor.name,
++        role: actor.character || '배역 정보 없음'
++    }));
++    
++    const categories = movie.genres.map(genre => genre.name);
++    
++    return {
++        title: movie.title,
++        categories: categories,
++        running_time: movie.runtime || 0,
++        release_date: new Date(movie.release_date),
++        rating_total: Math.round(movie.vote_average * 10) / 10,
++        review_count: movie.vote_count,
++        audience: movie.popularity || 0,
++        trailer_url: trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null,
++        description: movie.overview,
++        cast: cast,
++        director: director ? director.name : '감독 정보 없음',
++        poster_url: movie.poster_path ? `${TMDB_IMAGE_BASE_URL}${movie.poster_path}` : null
++    };
++}
++
++async function saveMovieToDatabase(movieData) {
++    try {
++        const existingMovie = await Movie.findOne({ title: movieData.title });
++        if (existingMovie) {
++            console.log(`영화 "${movieData.title}"는 이미 존재합니다.`);
++            return false;
++        }
++        
++        const newMovie = await Movie.createMovie(movieData);
++        console.log(`영화 "${newMovie.title}" 저장 완료`);
++        return true;
++    } catch (error) {
++        console.error(`영화 "${movieData.title}" 저장 실패:`, error.message);
++        return false;
++    }
++}
++
++async function crawlMovies(totalPages = 5) {
++    console.log('영화 크롤링 시작...');
++    
++    if (!TMDB_API_KEY || TMDB_API_KEY === 'YOUR_TMDB_API_KEY') {
++        console.error('TMDB API 키가 설정되지 않았습니다. .env 파일에 TMDB_API_KEY를 추가해주세요.');
++        return;
++    }
++    
++    await connectDB();
++    
++    let totalSaved = 0;
++    let totalProcessed = 0;
++    
++    for (let page = 1; page <= totalPages; page++) {
++        console.log(`\n페이지 ${page}/${totalPages} 처리 중...`);
++        
++        const movies = await getPopularMovies(page);
++        
++        for (const movie of movies) {
++            totalProcessed++;
++            console.log(`\n${totalProcessed}. "${movie.title}" 처리 중...`);
++            
++            const movieDetails = await getMovieDetails(movie.id);
++            if (!movieDetails) {
++                continue;
++            }
++            
++            const transformedData = transformMovieData(movieDetails);
++            const saved = await saveMovieToDatabase(transformedData);
++            
++            if (saved) {
++                totalSaved++;
++            }
++            
++            await new Promise(resolve => setTimeout(resolve, 250));
++        }
++    }
++    
++    console.log(`\n크롤링 완료!`);
++    console.log(`총 처리된 영화: ${totalProcessed}개`);
++    console.log(`저장된 영화: ${totalSaved}개`);
++    console.log(`중복 건너뛴 영화: ${totalProcessed - totalSaved}개`);
++    
++    mongoose.connection.close();
++}
++
++if (require.main === module) {
++    const pages = process.argv[2] ? parseInt(process.argv[2]) : 3;
++    crawlMovies(pages).catch(error => {
++        console.error('크롤링 중 오류 발생:', error);
++        process.exit(1);
++    });
++}
++
++module.exports = { crawlMovies };
+\ No newline at end of file

@@ -35,7 +35,7 @@ async function getPopularMovies(page = 1) {
 
 async function getMovieDetails(movieId) {
     try {
-        const [movieResponse, creditsResponse, videosResponse] = await Promise.all([
+        const [movieResponse, creditsResponse, videosResponse, releaseDatesResponse] = await Promise.all([
             axios.get(`${TMDB_BASE_URL}/movie/${movieId}`, {
                 params: {
                     api_key: TMDB_API_KEY,
@@ -53,13 +53,19 @@ async function getMovieDetails(movieId) {
                     api_key: TMDB_API_KEY,
                     language: 'ko-KR'
                 }
+            }),
+            axios.get(`${TMDB_BASE_URL}/movie/${movieId}/release_dates`, {
+                params: {
+                    api_key: TMDB_API_KEY
+                }
             })
         ]);
 
         return {
             movie: movieResponse.data,
             credits: creditsResponse.data,
-            videos: videosResponse.data
+            videos: videosResponse.data,
+            releaseDates: releaseDatesResponse.data
         };
     } catch (error) {
         console.error(`영화 ID ${movieId} 상세 정보 가져오기 실패:`, error.message);
@@ -67,8 +73,59 @@ async function getMovieDetails(movieId) {
     }
 }
 
+function getAgeRating(releaseDates) {
+    // 한국 등급 우선 확인
+    const koreanRelease = releaseDates.results.find(country => country.iso_3166_1 === 'KR');
+    if (koreanRelease && koreanRelease.release_dates.length > 0) {
+        const certification = koreanRelease.release_dates[0].certification;
+        if (certification) {
+            // 한국 영화 등급 체계: ALL, 12, 15, 18
+            switch (certification) {
+                case '전체관람가':
+                case 'ALL':
+                    return 'ALL';
+                case '12세이상관람가':
+                case '12':
+                    return '12';
+                case '15세이상관람가':
+                case '15':
+                    return '15';
+                case '청소년관람불가':
+                case '18':
+                    return '18';
+                default:
+                    return certification;
+            }
+        }
+    }
+    
+    // 미국 등급으로 대체
+    const usRelease = releaseDates.results.find(country => country.iso_3166_1 === 'US');
+    if (usRelease && usRelease.release_dates.length > 0) {
+        const certification = usRelease.release_dates[0].certification;
+        if (certification) {
+            // 미국 등급을 한국 등급으로 매핑
+            switch (certification) {
+                case 'G':
+                case 'PG':
+                    return 'ALL';
+                case 'PG-13':
+                    return '12';
+                case 'R':
+                    return '18';
+                case 'NC-17':
+                    return '18';
+                default:
+                    return 'ALL';
+            }
+        }
+    }
+    
+    return 'ALL'; // 기본값
+}
+
 function transformMovieData(movieData) {
-    const { movie, credits, videos } = movieData;
+    const { movie, credits, videos, releaseDates } = movieData;
     
     const trailer = videos.results.find(video => 
         video.type === 'Trailer' && video.site === 'YouTube'
@@ -82,6 +139,7 @@ function transformMovieData(movieData) {
     }));
     
     const categories = movie.genres.map(genre => genre.name);
+    const ageRating = getAgeRating(releaseDates);
     
     return {
         title: movie.title,
@@ -95,20 +153,15 @@ function transformMovieData(movieData) {
         description: movie.overview,
         cast: cast,
         director: director ? director.name : '감독 정보 없음',
-        poster_url: movie.poster_path ? `${TMDB_IMAGE_BASE_URL}${movie.poster_path}` : null
+        poster_url: movie.poster_path ? `${TMDB_IMAGE_BASE_URL}${movie.poster_path}` : null,
+        age_rating: ageRating
     };
 }
 
 async function saveMovieToDatabase(movieData) {
     try {
-        const existingMovie = await Movie.findOne({ title: movieData.title });
-        if (existingMovie) {
-            console.log(`영화 "${movieData.title}"는 이미 존재합니다.`);
-            return false;
-        }
-        
-        const newMovie = await Movie.createMovie(movieData);
-        console.log(`영화 "${newMovie.title}" 저장 완료`);
+        // 기존 데이터를 모두 삭제했으므로 중복 체크 불필요
+        await Movie.createMovie(movieData);
         return true;
     } catch (error) {
         console.error(`영화 "${movieData.title}" 저장 실패:`, error.message);
@@ -116,8 +169,19 @@ async function saveMovieToDatabase(movieData) {
     }
 }
 
-async function crawlMovies(totalPages = 5) {
-    console.log('영화 크롤링 시작...');
+async function clearExistingMovies() {
+    try {
+        const deleteResult = await Movie.deleteMany({});
+        console.log(`기존 영화 데이터 ${deleteResult.deletedCount}개 삭제 완료`);
+        return deleteResult.deletedCount;
+    } catch (error) {
+        console.error('기존 영화 데이터 삭제 실패:', error.message);
+        throw error;
+    }
+}
+
+async function crawlMovies(targetMovieCount = 100) {
+    console.log(`영화 크롤링 시작... (목표: ${targetMovieCount}개)`);
     
     if (!TMDB_API_KEY || TMDB_API_KEY === 'YOUR_TMDB_API_KEY') {
         console.error('TMDB API 키가 설정되지 않았습니다. .env 파일에 TMDB_API_KEY를 추가해주세요.');
@@ -126,17 +190,31 @@ async function crawlMovies(totalPages = 5) {
     
     await connectDB();
     
+    // 기존 영화 데이터 삭제
+    console.log('기존 영화 데이터를 삭제합니다...');
+    await clearExistingMovies();
+    
     let totalSaved = 0;
     let totalProcessed = 0;
+    let page = 1;
     
-    for (let page = 1; page <= totalPages; page++) {
-        console.log(`\n페이지 ${page}/${totalPages} 처리 중...`);
+    while (totalSaved < targetMovieCount) {
+        console.log(`\n페이지 ${page} 처리 중... (저장된 영화: ${totalSaved}/${targetMovieCount})`);
         
         const movies = await getPopularMovies(page);
         
+        if (movies.length === 0) {
+            console.log('더 이상 가져올 영화가 없습니다.');
+            break;
+        }
+        
         for (const movie of movies) {
+            if (totalSaved >= targetMovieCount) {
+                break;
+            }
+            
             totalProcessed++;
-            console.log(`\n${totalProcessed}. "${movie.title}" 처리 중...`);
+            console.log(`\n${totalProcessed}. "${movie.title}" 처리 중... (저장된 영화: ${totalSaved}/${targetMovieCount})`);
             
             const movieDetails = await getMovieDetails(movie.id);
             if (!movieDetails) {
@@ -148,23 +226,33 @@ async function crawlMovies(totalPages = 5) {
             
             if (saved) {
                 totalSaved++;
+                console.log(`✅ "${transformedData.title}" 저장 완료 (${totalSaved}/${targetMovieCount})`);
             }
             
             await new Promise(resolve => setTimeout(resolve, 250));
         }
+        
+        page++;
+        
+        if (page > 50) {
+            console.log('최대 페이지 수에 도달했습니다.');
+            break;
+        }
     }
     
-    console.log(`\n크롤링 완료!`);
+    console.log(`\n🎉 크롤링 완료!`);
     console.log(`총 처리된 영화: ${totalProcessed}개`);
     console.log(`저장된 영화: ${totalSaved}개`);
     console.log(`중복 건너뛴 영화: ${totalProcessed - totalSaved}개`);
+    console.log(`목표 달성률: ${((totalSaved / targetMovieCount) * 100).toFixed(1)}%`);
     
     mongoose.connection.close();
 }
 
 if (require.main === module) {
-    const pages = process.argv[2] ? parseInt(process.argv[2]) : 3;
-    crawlMovies(pages).catch(error => {
+    const movieCount = process.argv[2] ? parseInt(process.argv[2]) : 50;
+    console.log(`크롤링할 영화 개수: ${movieCount}개`);
+    crawlMovies(movieCount).catch(error => {
         console.error('크롤링 중 오류 발생:', error);
         process.exit(1);
     });
