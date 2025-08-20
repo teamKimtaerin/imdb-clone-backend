@@ -105,7 +105,8 @@ function getAgeRating(releaseDates) {
                     return '15';
                 case '청소년관람불가':
                 case '18':
-                    return '18';
+                case '19+':
+                    return '19+';
                 default:
                     return certification;
             }
@@ -125,16 +126,15 @@ function getAgeRating(releaseDates) {
                 case 'PG-13':
                     return '12';
                 case 'R':
-                    return '18';
                 case 'NC-17':
-                    return '18';
+                    return '19+';
                 default:
-                    return 'ALL';
+                    return 'NR';
             }
         }
     }
     
-    return 'ALL'; // 기본값
+    return 'NR'; // 등급이 없는 경우 NR (Not Rated)로 설정
 }
 
 function transformMovieData(movieData) {
@@ -148,31 +148,52 @@ function transformMovieData(movieData) {
     
     const cast = credits.cast.slice(0, 10).map(actor => ({
         name: actor.name,
-        role: actor.character || '배역 정보 없음'
+        role: actor.character || '배역 정보 없음',
+        profile_image: actor.profile_path ? `${TMDB_IMAGE_BASE_URL}${actor.profile_path}` : null
     }));
     
     const categories = movie.genres.map(genre => genre.name);
     const ageRating = getAgeRating(releaseDates);
+    const isAdultContent = ageRating === '19+';
     
     return {
         title: movie.title,
         categories: categories,
         running_time: movie.runtime || 0,
         release_date: new Date(movie.release_date),
-        rating_total: Math.round(movie.vote_average * 10) / 10,
-        review_count: movie.vote_count,
+        rating_total: 0, // 평점은 내부 리뷰 시스템으로 관리
+        review_count: 0, // 리뷰 수는 내부 리뷰 시스템으로 관리
         audience: movie.popularity || 0,
         trailer_url: trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null,
         description: movie.overview,
         cast: cast,
-        director: director ? director.name : '감독 정보 없음',
+        director: director ? {
+            name: director.name,
+            profile_image: director.profile_path ? `${TMDB_IMAGE_BASE_URL}${director.profile_path}` : null
+        } : {
+            name: '감독 정보 없음',
+            profile_image: null
+        },
         poster_url: movie.poster_path ? `${TMDB_IMAGE_BASE_URL}${movie.poster_path}` : null,
-        age_rating: ageRating
+        age_rating: ageRating,
+        is_adult_content: isAdultContent
     };
 }
 
 async function saveMovieToDatabase(movieData) {
     try {
+        // 중복 체크: 제목, 개봉일, 러닝타임이 모두 같은 영화가 있는지 확인
+        const existingMovie = await Movie.findOne({
+            title: movieData.title,
+            release_date: movieData.release_date,
+            running_time: movieData.running_time
+        });
+        
+        if (existingMovie) {
+            console.log(`⚠️  중복 영화 발견, 건너뛰기: "${movieData.title}" (${new Date(movieData.release_date).getFullYear()})`);
+            return false; // 중복이므로 저장하지 않음
+        }
+        
         // 컨트롤러 경유: movie 생성 시 SearchKey도 함께 생성됨
         const created = await callController(movieController.createMovie, { body: movieData });
         return !!created; // 성공 시 true
@@ -210,6 +231,8 @@ async function crawlMovies(targetMovieCount = 100) {
     
     let totalSaved = 0;
     let totalProcessed = 0;
+    let totalSkipped = 0; // 중복으로 건너뛴 영화 수
+    let totalFailed = 0;  // 처리 실패한 영화 수
     let page = 1;
     
     while (totalSaved < targetMovieCount) {
@@ -232,6 +255,8 @@ async function crawlMovies(targetMovieCount = 100) {
             
             const movieDetails = await getMovieDetails(movie.id);
             if (!movieDetails) {
+                totalFailed++;
+                console.log(`❌ "${movie.title}" 상세 정보 가져오기 실패`);
                 continue;
             }
             
@@ -241,6 +266,10 @@ async function crawlMovies(targetMovieCount = 100) {
             if (saved) {
                 totalSaved++;
                 console.log(`✅ "${transformedData.title}" 저장 완료 (${totalSaved}/${targetMovieCount})`);
+            } else {
+                // saveMovieToDatabase에서 false를 반환한 경우는 중복 또는 저장 실패
+                // 중복인지 확인하기 위해 로그를 확인하거나, 별도로 체크할 수 있음
+                totalSkipped++;
             }
             
             await new Promise(resolve => setTimeout(resolve, 250));
@@ -256,8 +285,9 @@ async function crawlMovies(targetMovieCount = 100) {
     
     console.log(`\n🎉 크롤링 완료!`);
     console.log(`총 처리된 영화: ${totalProcessed}개`);
-    console.log(`저장된 영화: ${totalSaved}개`);
-    console.log(`중복 건너뛴 영화: ${totalProcessed - totalSaved}개`);
+    console.log(`✅ 저장된 영화: ${totalSaved}개`);
+    console.log(`⚠️  중복 건너뛴 영화: ${totalSkipped}개`);
+    console.log(`❌ 처리 실패한 영화: ${totalFailed}개`);
     console.log(`목표 달성률: ${((totalSaved / targetMovieCount) * 100).toFixed(1)}%`);
     
     mongoose.connection.close();

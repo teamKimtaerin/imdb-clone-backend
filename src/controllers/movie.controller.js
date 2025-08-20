@@ -9,7 +9,9 @@ exports.getMovies = async (req, res) => {
         const limitNum = parseInt(limit);
         const skip = (pageNum - 1) * limitNum;
         
-        let query = {};
+        let query = {
+            age_rating: { $ne: 'NR' } // NR 등급 영화는 제외
+        };
         
         // 카테고리 필터링 - 선택된 모든 카테고리를 포함하는 영화만
         if (categories) {
@@ -156,7 +158,9 @@ exports.getMovieByTitle = async (req, res) => {
         }
         
         const movies = await Movie.getMovieByTitle(title);
-        res.json(movies);
+        // NR 등급 영화 필터링
+        const filteredMovies = movies.filter(movie => movie.age_rating !== 'NR');
+        res.json(filteredMovies);
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
@@ -172,7 +176,9 @@ exports.getMovieByCategories = async (req, res) => {
         
         const categoriesArray = Array.isArray(categories) ? categories : categories.split(',');
         const movies = await Movie.getMovieByCategories(categoriesArray);
-        res.json(movies);
+        // NR 등급 영화 필터링
+        const filteredMovies = movies.filter(movie => movie.age_rating !== 'NR');
+        res.json(filteredMovies);
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
@@ -182,7 +188,9 @@ exports.getMovieByRecent = async (req, res) => {
     try {
         const { limit } = req.query;
         const movies = await Movie.getMovieByRecent(limit ? parseInt(limit) : 10);
-        res.json(movies);
+        // NR 등급 영화 필터링
+        const filteredMovies = movies.filter(movie => movie.age_rating !== 'NR');
+        res.json(filteredMovies);
     } catch (err) {
         res.status(500).json({ message: err.message });
     }

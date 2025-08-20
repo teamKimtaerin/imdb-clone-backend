@@ -6,7 +6,7 @@ function extractKeysFromMovie(m) {
   const out = [];
   if (!m) return out;
   if (m.title) out.push({ keyDisplay: m.title, key_type: 'movie' });
-  if (m.director) out.push({ keyDisplay: m.director, key_type: 'director' });
+  if (m.director?.name) out.push({ keyDisplay: m.director.name, key_type: 'director' });
   if (Array.isArray(m.cast)) {
     for (const c of m.cast) if (c?.name) out.push({ keyDisplay: c.name, key_type: 'actor' });
   }
