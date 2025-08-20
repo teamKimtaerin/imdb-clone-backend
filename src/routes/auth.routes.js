@@ -1,6 +1,19 @@
 const express = require('express');
-const { register, login, getProfile } = require('../controllers/auth.controller');
-const authMiddleware = require('../middleware/auth.middleware');
+const { 
+    register, 
+    login, 
+    logout,
+    refreshAccessToken,
+    getProfile, 
+    verifyEmailCode, 
+    resendVerificationEmail,
+    sendEmailVerification,
+    changePassword,
+    changeEmail,
+    confirmEmailChange,
+    deleteAccount
+} = require('../controllers/auth.controller');
+const { verifyToken, verifyRefreshToken } = require('../middleware/auth.middleware');
 
 const router = express.Router();
 
@@ -90,6 +103,250 @@ router.post('/login', login);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/profile', authMiddleware, getProfile);
+router.get('/profile', verifyToken, getProfile);
+
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: 로그아웃
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 로그아웃 성공
+ */
+router.post('/logout', verifyToken, logout);
+
+/**
+ * @swagger
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Refresh access token
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - refreshToken
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Token refreshed successfully
+ *       401:
+ *         description: Invalid refresh token
+ */
+router.post('/refresh', refreshAccessToken);
+
+/**
+ * @swagger
+ * /api/auth/verify-code:
+ *   post:
+ *     summary: Verify email with code
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - code
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               code:
+ *                 type: string
+ *                 minLength: 6
+ *                 maxLength: 6
+ *     responses:
+ *       200:
+ *         description: Email verified successfully, returns tokens
+ *       400:
+ *         description: Invalid or expired code
+ */
+router.post('/verify-code', verifyEmailCode);
+
+/**
+ * @swagger
+ * /api/auth/resend-verification:
+ *   post:
+ *     summary: Resend email verification
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Verification email sent
+ *       400:
+ *         description: Email already verified
+ *       404:
+ *         description: User not found
+ */
+router.post('/resend-verification', resendVerificationEmail);
+
+/**
+ * @swagger
+ * /api/auth/send-verification:
+ *   post:
+ *     summary: Send email verification (legacy endpoint)
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Verification status
+ *       409:
+ *         description: Email already registered
+ */
+router.post('/send-verification', sendEmailVerification);
+
+/**
+ * @swagger
+ * /api/auth/change-password:
+ *   post:
+ *     summary: Change user password
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - currentPassword
+ *               - newPassword
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 6
+ *     responses:
+ *       200:
+ *         description: Password changed successfully
+ *       401:
+ *         description: Current password incorrect
+ */
+router.post('/change-password', verifyToken, changePassword);
+
+/**
+ * @swagger
+ * /api/auth/change-email:
+ *   post:
+ *     summary: Initiate email change
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - newEmail
+ *               - password
+ *             properties:
+ *               newEmail:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Verification email sent
+ *       400:
+ *         description: Email already in use
+ */
+router.post('/change-email', verifyToken, changeEmail);
+
+/**
+ * @swagger
+ * /api/auth/confirm-email-change:
+ *   post:
+ *     summary: Confirm email change with verification code
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - code
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               code:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Email changed successfully
+ *       400:
+ *         description: Invalid or expired code
+ */
+router.post('/confirm-email-change', verifyToken, confirmEmailChange);
+
+/**
+ * @swagger
+ * /api/auth/delete-account:
+ *   delete:
+ *     summary: Delete user account
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - password
+ *             properties:
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Account deleted successfully
+ *       401:
+ *         description: Password incorrect
+ */
+router.delete('/delete-account', verifyToken, deleteAccount);
 
 module.exports = router;
