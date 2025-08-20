@@ -238,15 +238,33 @@ const swaggerDefinition = {
                 role: {
                   type: 'string',
                   example: '제이크 설리'
+                },
+                profile_image: {
+                  type: 'string',
+                  example: 'https://image.tmdb.org/t/p/w500/example.jpg'
                 }
               }
             },
             description: '출연진'
           },
           director: {
-            type: 'string',
-            description: '감독',
-            example: '제임스 카메론'
+            type: 'object',
+            properties: {
+              name: {
+                type: 'string',
+                example: '제임스 카메론'
+              },
+              profile_image: {
+                type: 'string',
+                example: 'https://image.tmdb.org/t/p/w500/example.jpg'
+              }
+            },
+            description: '감독 정보'
+          },
+          is_adult_content: {
+            type: 'boolean',
+            description: '18등급 여부 (블러 효과용)',
+            example: false
           },
           poster_url: {
             type: 'string',
@@ -304,13 +322,26 @@ const swaggerDefinition = {
                 role: {
                   type: 'string',
                   example: '제이크 설리'
+                },
+                profile_image: {
+                  type: 'string',
+                  example: 'https://image.tmdb.org/t/p/w500/example.jpg'
                 }
               }
             }
           },
           director: {
-            type: 'string',
-            example: '제임스 카메론'
+            type: 'object',
+            properties: {
+              name: {
+                type: 'string',
+                example: '제임스 카메론'
+              },
+              profile_image: {
+                type: 'string',
+                example: 'https://image.tmdb.org/t/p/w500/example.jpg'
+              }
+            }
           },
           poster_url: {
             type: 'string',

@@ -2,7 +2,13 @@ const mongoose = require('mongoose');
 
 const castSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  role: { type: String, required: true }
+  role: { type: String, required: true },
+  profile_image: { type: String }
+}, { _id: false });
+
+const directorSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  profile_image: { type: String }
 }, { _id: false });
 
 const movieSchema = new mongoose.Schema({
@@ -16,9 +22,10 @@ const movieSchema = new mongoose.Schema({
   trailer_url: { type: String },
   description: { type: String },
   cast: { type: [castSchema], default: [] },
-  director: { type: String },
+  director: { type: directorSchema },
   poster_url: { type: String },
-  age_rating: { type: String, default: 'ALL' }, // 시청 등급: ALL, 12, 15, 18 등
+  age_rating: { type: String, default: 'ALL' }, // 시청 등급: ALL, 12, 15, 18, NR 등
+  is_adult_content: { type: Boolean, default: false }, // 18등급 여부 (블러 효과용)
   created_at: { type: Date, default: Date.now }
 });
 
