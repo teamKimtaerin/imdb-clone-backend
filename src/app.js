@@ -13,7 +13,12 @@ const searchRoutes = require('./routes/search.routes');
 const app = express();
 
 // 미들웨어
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:3000', 'http://localhost:3001'], // Frontend URLs
+    credentials: true, // Allow cookies and authorization headers
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 // 요청 로깅 미들웨어 추가

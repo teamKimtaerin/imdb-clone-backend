@@ -7,7 +7,11 @@ const {
     getProfile, 
     verifyEmailCode, 
     resendVerificationEmail,
-    sendEmailVerification
+    sendEmailVerification,
+    changePassword,
+    changeEmail,
+    confirmEmailChange,
+    deleteAccount
 } = require('../controllers/auth.controller');
 const { verifyToken, verifyRefreshToken } = require('../middleware/auth.middleware');
 
@@ -224,5 +228,125 @@ router.post('/resend-verification', resendVerificationEmail);
  *         description: Email already registered
  */
 router.post('/send-verification', sendEmailVerification);
+
+/**
+ * @swagger
+ * /api/auth/change-password:
+ *   post:
+ *     summary: Change user password
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - currentPassword
+ *               - newPassword
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 6
+ *     responses:
+ *       200:
+ *         description: Password changed successfully
+ *       401:
+ *         description: Current password incorrect
+ */
+router.post('/change-password', verifyToken, changePassword);
+
+/**
+ * @swagger
+ * /api/auth/change-email:
+ *   post:
+ *     summary: Initiate email change
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - newEmail
+ *               - password
+ *             properties:
+ *               newEmail:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Verification email sent
+ *       400:
+ *         description: Email already in use
+ */
+router.post('/change-email', verifyToken, changeEmail);
+
+/**
+ * @swagger
+ * /api/auth/confirm-email-change:
+ *   post:
+ *     summary: Confirm email change with verification code
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - code
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               code:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Email changed successfully
+ *       400:
+ *         description: Invalid or expired code
+ */
+router.post('/confirm-email-change', verifyToken, confirmEmailChange);
+
+/**
+ * @swagger
+ * /api/auth/delete-account:
+ *   delete:
+ *     summary: Delete user account
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - password
+ *             properties:
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Account deleted successfully
+ *       401:
+ *         description: Password incorrect
+ */
+router.delete('/delete-account', verifyToken, deleteAccount);
 
 module.exports = router;

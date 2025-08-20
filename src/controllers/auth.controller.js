@@ -167,7 +167,9 @@ const login = async (req, res) => {
         user: {
           id: user._id,
           username: user.username,
-          email: user.email
+          nickname: user.nickname,
+          email: user.email,
+          isEmailVerified: user.isEmailVerified
         }
       }
     });
@@ -227,7 +229,7 @@ const refreshAccessToken = async (req, res) => {
 
 const getProfile = async (req, res) => {
     try {
-        const user = await User.findById(req.user._id).select('-password -refreshToken');
+        const user = await User.findById(req.user._id).select('-password -refreshToken -emailVerificationCode -emailVerificationExpires');
 
         if(!user) {
             return res.status(404).json({
@@ -238,7 +240,17 @@ const getProfile = async (req, res) => {
 
         res.json({
             success: true,
-            data: {user}
+            data: {
+                user: {
+                    id: user._id,
+                    username: user.username,
+                    nickname: user.nickname,
+                    email: user.email,
+                    isEmailVerified: user.isEmailVerified,
+                    createdAt: user.createdAt,
+                    updatedAt: user.updatedAt
+                }
+            }
         });
     } catch (error) {
         console.error('Get profile error:', error);
@@ -461,6 +473,221 @@ const logout = async (req, res) => {
     }
 };
 
+const changePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: 'Current password and new password are required'
+            });
+        }
+        
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: 'New password must be at least 6 characters'
+            });
+        }
+        
+        const user = await User.findById(req.user._id);
+        
+        const isPasswordValid = await user.comparePassword(currentPassword);
+        if (!isPasswordValid) {
+            return res.status(401).json({
+                success: false,
+                message: 'Current password is incorrect'
+            });
+        }
+        
+        user.password = newPassword;
+        await user.save();
+        
+        res.json({
+            success: true,
+            message: 'Password changed successfully'
+        });
+        
+    } catch (error) {
+        console.error('Change password error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to change password',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+const changeEmail = async (req, res) => {
+    try {
+        const { newEmail, password } = req.body;
+        
+        if (!newEmail || !password) {
+            return res.status(400).json({
+                success: false,
+                message: 'New email and password are required'
+            });
+        }
+        
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(newEmail)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid email format'
+            });
+        }
+        
+        const user = await User.findById(req.user._id);
+        
+        // Verify password
+        const isPasswordValid = await user.comparePassword(password);
+        if (!isPasswordValid) {
+            return res.status(401).json({
+                success: false,
+                message: 'Password is incorrect'
+            });
+        }
+        
+        // Check if new email already exists
+        const existingUser = await User.findOne({ email: newEmail });
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email already in use'
+            });
+        }
+        
+        // Generate verification code for new email
+        const verificationCode = generateVerificationCode();
+        const verificationExpires = new Date(Date.now() + 15 * 60 * 1000);
+        
+        // Store verification in temporary collection
+        await EmailVerification.findOneAndUpdate(
+            { email: newEmail },
+            {
+                email: newEmail,
+                verificationCode,
+                isVerified: false,
+                expiresAt: verificationExpires
+            },
+            { upsert: true, new: true }
+        );
+        
+        // Send verification email
+        await sendVerificationEmail(newEmail, verificationCode);
+        
+        res.json({
+            success: true,
+            message: 'Verification email sent to new address'
+        });
+        
+    } catch (error) {
+        console.error('Change email error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to change email',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+const confirmEmailChange = async (req, res) => {
+    try {
+        const { email, code } = req.body;
+        
+        if (!email || !code) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email and verification code are required'
+            });
+        }
+        
+        // Verify code
+        const verification = await EmailVerification.findOne({
+            email,
+            verificationCode: code,
+            expiresAt: { $gt: Date.now() }
+        });
+        
+        if (!verification) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid or expired verification code'
+            });
+        }
+        
+        // Update user email
+        const user = await User.findById(req.user._id);
+        user.email = email;
+        user.isEmailVerified = true;
+        await user.save();
+        
+        // Clean up verification record
+        await EmailVerification.deleteOne({ email });
+        
+        res.json({
+            success: true,
+            message: 'Email changed successfully',
+            data: {
+                email: user.email
+            }
+        });
+        
+    } catch (error) {
+        console.error('Confirm email change error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to confirm email change',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+const deleteAccount = async (req, res) => {
+    try {
+        const { password } = req.body;
+        
+        if (!password) {
+            return res.status(400).json({
+                success: false,
+                message: 'Password is required to delete account'
+            });
+        }
+        
+        const user = await User.findById(req.user._id);
+        
+        // Verify password
+        const isPasswordValid = await user.comparePassword(password);
+        if (!isPasswordValid) {
+            return res.status(401).json({
+                success: false,
+                message: 'Password is incorrect'
+            });
+        }
+        
+        // Delete user account
+        await User.findByIdAndDelete(req.user._id);
+        
+        // Clean up any verification records
+        await EmailVerification.deleteOne({ email: user.email });
+        
+        res.json({
+            success: true,
+            message: 'Account deleted successfully'
+        });
+        
+    } catch (error) {
+        console.error('Delete account error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete account',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
 
 module.exports = {
     register,
@@ -470,5 +697,9 @@ module.exports = {
     getProfile,
     verifyEmailCode,
     resendVerificationEmail,
-    sendEmailVerification
+    sendEmailVerification,
+    changePassword,
+    changeEmail,
+    confirmEmailChange,
+    deleteAccount
 }
