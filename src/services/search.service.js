@@ -60,7 +60,7 @@ function scoreFromFuse(r, query, qn, qj, qi) {
   if (qi && (item.key_initials || '').startsWith(qi)) s -= 0.04; // 초성 prefix 보너스
   if ((item.key_display || '').startsWith(query)) s -= 0.05;     // 표시 prefix 보너스
   if (s < 0) s = 0;
-  return { key: item.key_display, movieIds: item.movieIds, _score: +s.toFixed(4) };
+  return { key: item.key_display, movieIds: item.movieIds, key_type: item.key_type, _score: +s.toFixed(4) };
 }
 // ---------------------------------------------------------------------------
 
@@ -151,15 +151,16 @@ async function autocompleteService(query, limit = 10) {
 
     // 4) 후보 보충(중복 제외): 각 후보의 최고 매치 소스에 따른 점수로 일괄 보충
     if (scored.length < limit) {
-      const seen = new Set(scored.map((x) => x.key));
+      const seen = new Set(scored.map((x) => `${x.key_type || 'unknown'}::${x.key}`));
 
       const pending = [];
       for (const c of candidates) {
-        if (seen.has(c.key_display)) continue;
+        const comp = `${c.key_type || 'unknown'}::${c.key_display}`;
+        if (seen.has(comp)) continue;
         const src = chooseBestSource(c, qn, qj, qi, query);
         const base = baseScoreMap[src] ?? 0.90;
         const eps = (src === 'norm' ? 0.0001 : src === 'jamo' ? 0.0002 : src === 'initials' ? 0.0003 : 0.0009);
-        pending.push({ key: c.key_display, movieIds: c.movieIds, _score: base + eps, _source: src });
+        pending.push({ key: c.key_display, movieIds: c.movieIds, key_type: c.key_type, _score: base + eps, _source: src });
       }
 
       // 소스 우선순위 → 점수 → 키 길이로 안정 정렬 후 limit까지 보충
@@ -172,9 +173,10 @@ async function autocompleteService(query, limit = 10) {
       });
 
       for (const p of pending) {
-        if (seen.has(p.key)) continue;
+        const comp = `${p.key_type || 'unknown'}::${p.key}`;
+        if (seen.has(comp)) continue;
         scored.push(p);
-        seen.add(p.key);
+        seen.add(comp);
         if (scored.length >= limit) break;
       }
     }
@@ -187,8 +189,9 @@ async function autocompleteService(query, limit = 10) {
       return (a.key?.length || 999) - (b.key?.length || 999);
     });
 
-    const finalResults = scored.slice(0, limit).map(({ key, movieIds, _score, _source }) => ({
+    const finalResults = scored.slice(0, limit).map(({ key, movieIds, key_type, _score }) => ({
       key,
+      type: key_type || 'unknown',
       movieIds,
       score: _score,
     }));
