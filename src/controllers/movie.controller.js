@@ -1,5 +1,72 @@
 const Movie = require('../models/movie.model');
 
+exports.getMovies = async (req, res) => {
+    try {
+        const { page = 1, limit = 20, categories, sort = 'popular' } = req.query;
+        
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const skip = (pageNum - 1) * limitNum;
+        
+        let query = {};
+        
+        // 카테고리 필터링 - 선택된 모든 카테고리를 포함하는 영화만
+        if (categories) {
+            const categoriesArray = Array.isArray(categories) ? categories : categories.split(',');
+            query.categories = { $all: categoriesArray };
+        }
+        
+        let sortOption = {};
+        
+        // 정렬 옵션
+        switch (sort) {
+            case 'popular':
+                // 인기도: 평점 평균 + 관객 수 + 리뷰 수 + 최신도를 종합한 점수
+                sortOption = { 
+                    $expr: {
+                        $add: [
+                            // 평점 평균 (40%) - rating_total이 이미 평균값
+                            { $multiply: ["$rating_total", 0.4] },
+                            // 관객 수 (30%)
+                            { $multiply: [{ $divide: ["$audience", 1000000] }, 0.3] },
+                            // 리뷰 수 (15%)
+                            { $multiply: ["$review_count", 0.15] },
+                            // 최신도 - 2020년 이후 영화에 보너스 점수 (15%)
+                            { $multiply: [
+                                { $cond: [
+                                    { $gte: ["$release_date", new Date("2010-01-01")] },
+                                    { $divide: [
+                                        { $subtract: [
+                                            { $year: "$release_date" },
+                                            2010
+                                        ]}, 
+                                        4
+                                    ]},
+                                    0
+                                ]},
+                                0.15
+                            ]}
+                        ]
+                    }
+                };
+                break;
+            case 'recent':
+                sortOption = { release_date: -1 };
+                break;
+            case 'rating':
+                sortOption = { rating_total: -1 };
+                break;
+            default:
+                sortOption = { created_at: -1 };
+        }
+        
+        const movies = await Movie.getMoviesWithPagination(query, sortOption, skip, limitNum);
+        res.json(movies);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
 exports.createMovie = async (req, res) => {
     try {
         const movie = await Movie.createMovie(req.body);

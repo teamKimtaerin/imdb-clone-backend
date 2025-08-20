@@ -169,6 +169,295 @@ const swaggerDefinition = {
             example: '상세 오류 정보'
           }
         }
+      },
+      Movie: {
+        type: 'object',
+        properties: {
+          _id: {
+            type: 'string',
+            description: '영화 고유 ID'
+          },
+          title: {
+            type: 'string',
+            description: '영화 제목',
+            example: '아바타'
+          },
+          categories: {
+            type: 'array',
+            items: {
+              type: 'string'
+            },
+            description: '영화 장르',
+            example: ['액션', 'SF']
+          },
+          running_time: {
+            type: 'number',
+            description: '상영 시간 (분)',
+            example: 162
+          },
+          release_date: {
+            type: 'string',
+            format: 'date',
+            description: '개봉일',
+            example: '2009-12-18'
+          },
+          rating_total: {
+            type: 'number',
+            description: '총 평점',
+            example: 0
+          },
+          review_count: {
+            type: 'number',
+            description: '리뷰 개수',
+            example: 0
+          },
+          audience: {
+            type: 'number',
+            description: '관객 수',
+            example: 0
+          },
+          trailer_url: {
+            type: 'string',
+            description: '트레일러 URL',
+            example: 'https://youtube.com/watch?v=example'
+          },
+          description: {
+            type: 'string',
+            description: '영화 설명',
+            example: '판도라라는 행성에서 벌어지는 이야기'
+          },
+          cast: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: {
+                  type: 'string',
+                  example: '샘 워딩턴'
+                },
+                role: {
+                  type: 'string',
+                  example: '제이크 설리'
+                }
+              }
+            },
+            description: '출연진'
+          },
+          director: {
+            type: 'string',
+            description: '감독',
+            example: '제임스 카메론'
+          },
+          poster_url: {
+            type: 'string',
+            description: '포스터 URL',
+            example: 'https://example.com/poster.jpg'
+          },
+          created_at: {
+            type: 'string',
+            format: 'date-time',
+            description: '생성일시'
+          }
+        }
+      },
+      MovieRequest: {
+        type: 'object',
+        required: ['title', 'categories', 'running_time', 'release_date'],
+        properties: {
+          title: {
+            type: 'string',
+            example: '아바타'
+          },
+          categories: {
+            type: 'array',
+            items: {
+              type: 'string'
+            },
+            example: ['액션', 'SF']
+          },
+          running_time: {
+            type: 'number',
+            example: 162
+          },
+          release_date: {
+            type: 'string',
+            format: 'date',
+            example: '2009-12-18'
+          },
+          trailer_url: {
+            type: 'string',
+            example: 'https://youtube.com/watch?v=example'
+          },
+          description: {
+            type: 'string',
+            example: '판도라라는 행성에서 벌어지는 이야기'
+          },
+          cast: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: {
+                  type: 'string',
+                  example: '샘 워딩턴'
+                },
+                role: {
+                  type: 'string',
+                  example: '제이크 설리'
+                }
+              }
+            }
+          },
+          director: {
+            type: 'string',
+            example: '제임스 카메론'
+          },
+          poster_url: {
+            type: 'string',
+            example: 'https://example.com/poster.jpg'
+          }
+        }
+      },
+      Review: {
+        type: 'object',
+        properties: {
+          _id: {
+            type: 'string',
+            description: '리뷰 고유 ID'
+          },
+          title: {
+            type: 'string',
+            description: '리뷰 제목',
+            example: '정말 재미있는 영화였습니다'
+          },
+          rating: {
+            type: 'number',
+            description: '평점 (1-10)',
+            example: 9
+          },
+          content: {
+            type: 'string',
+            description: '리뷰 내용',
+            example: '스토리와 영상미가 뛰어납니다'
+          },
+          is_spoiler: {
+            type: 'boolean',
+            description: '스포일러 여부',
+            example: false
+          },
+          user: {
+            type: 'object',
+            properties: {
+              user_id: {
+                type: 'string',
+                description: '사용자 ID'
+              },
+              nickname: {
+                type: 'string',
+                description: '사용자 닉네임',
+                example: '영화팬123'
+              }
+            }
+          },
+          movie: {
+            type: 'object',
+            properties: {
+              movie_id: {
+                type: 'string',
+                description: '영화 ID'
+              },
+              release_date: {
+                type: 'string',
+                format: 'date',
+                description: '영화 개봉일'
+              },
+              running_time: {
+                type: 'number',
+                description: '영화 상영시간'
+              }
+            }
+          },
+          createdAt: {
+            type: 'string',
+            format: 'date-time',
+            description: '리뷰 작성일시'
+          },
+          updatedAt: {
+            type: 'string',
+            format: 'date-time',
+            description: '리뷰 수정일시'
+          }
+        }
+      },
+      ReviewRequest: {
+        type: 'object',
+        required: ['userId', 'rating'],
+        properties: {
+          userId: {
+            type: 'string',
+            description: '사용자 ID',
+            example: '507f1f77bcf86cd799439011'
+          },
+          nickname: {
+            type: 'string',
+            description: '사용자 닉네임',
+            example: '영화팬123'
+          },
+          title: {
+            type: 'string',
+            description: '리뷰 제목',
+            example: '정말 재미있는 영화였습니다'
+          },
+          rating: {
+            type: 'number',
+            description: '평점 (1-10)',
+            minimum: 1,
+            maximum: 10,
+            example: 9
+          },
+          content: {
+            type: 'string',
+            description: '리뷰 내용',
+            example: '스토리와 영상미가 뛰어납니다'
+          },
+          comment: {
+            type: 'string',
+            description: '리뷰 댓글 (content 대신 사용 가능)',
+            example: '스토리와 영상미가 뛰어납니다'
+          },
+          is_spoiler: {
+            type: 'boolean',
+            description: '스포일러 여부',
+            example: false
+          }
+        }
+      },
+      ReviewUpdateRequest: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: '리뷰 제목',
+            example: '수정된 리뷰 제목'
+          },
+          rating: {
+            type: 'number',
+            description: '평점 (1-10)',
+            minimum: 1,
+            maximum: 10,
+            example: 8
+          },
+          content: {
+            type: 'string',
+            description: '리뷰 내용',
+            example: '수정된 리뷰 내용입니다'
+          },
+          is_spoiler: {
+            type: 'boolean',
+            description: '스포일러 여부',
+            example: true
+          }
+        }
       }
     }
   }
