@@ -1,4 +1,5 @@
 const Movie = require('../models/movie.model');
+const { upsertForMovie, removeForMovie, cleanupOrphans } = require('../services/build-search-keys');
 
 exports.getMovies = async (req, res) => {
     try {
@@ -70,6 +71,14 @@ exports.getMovies = async (req, res) => {
 exports.createMovie = async (req, res) => {
     try {
         const movie = await Movie.createMovie(req.body);
+        
+        // SearchKey 동기화 - 새로 생성된 영화만 대상으로
+        try {
+            await upsertForMovie(movie);
+        } catch (e) {
+            console.error('[upsertForMovie(create)] failed:', e);
+        }
+        
         res.status(201).json(movie);
     } catch (err) {
         res.status(400).json({ message: err.message });
@@ -79,10 +88,20 @@ exports.createMovie = async (req, res) => {
 exports.updateMovie = async (req, res) => {
     try {
         const { id } = req.params;
+        const prevMovie = await Movie.findById(id);
         const movie = await Movie.updateMovie(id, req.body);
         
         if (!movie) {
             return res.status(404).json({ message: 'Movie not found' });
+        }
+
+        // SearchKey 동기화: 이전 상태 키 제거 -> 새 상태 업서트 -> 고아 키 정리
+        try {
+            await removeForMovie(prevMovie);
+            await upsertForMovie(movie);
+            await cleanupOrphans();
+        } catch (e) {
+            console.error('[search-keys sync on update] failed:', e);
         }
         
         res.json(movie);
@@ -98,6 +117,13 @@ exports.deleteMovie = async (req, res) => {
         
         if (!movie) {
             return res.status(404).json({ message: 'Movie not found' });
+        }
+        
+        try {
+            await removeForMovie(movie);
+            await cleanupOrphans();
+        } catch (e) {
+            console.error('[search-keys cleanup on delete] failed:', e);
         }
         
         res.json({ message: 'Movie deleted successfully' });
