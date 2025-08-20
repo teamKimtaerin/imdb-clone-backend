@@ -2,10 +2,23 @@ require('dotenv').config();
 const axios = require('axios');
 const mongoose = require('mongoose');
 const Movie = require('../models/movie.model');
+const movieController = require('../controllers/movie.controller');
+const SearchKey = require('../models/search-key.model');
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY || 'YOUR_TMDB_API_KEY';
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500';
+
+function callController(ctrlFn, { body = {}, params = {}, query = {} } = {}) {
+    return new Promise((resolve, reject) => {
+        const req = { body, params, query };
+        const res = {
+            status(code) { this.statusCode = code; return this; },
+            json(payload) { resolve(payload); },
+        };
+        Promise.resolve(ctrlFn(req, res)).catch(reject);
+    });
+}
 
 async function connectDB() {
     try {
@@ -92,7 +105,8 @@ function getAgeRating(releaseDates) {
                     return '15';
                 case '청소년관람불가':
                 case '18':
-                    return '18';
+                case '19+':
+                    return '19+';
                 default:
                     return certification;
             }
@@ -112,9 +126,8 @@ function getAgeRating(releaseDates) {
                 case 'PG-13':
                     return '12';
                 case 'R':
-                    return '18';
                 case 'NC-17':
-                    return '18';
+                    return '19+';
                 default:
                     return 'NR';
             }
@@ -141,7 +154,7 @@ function transformMovieData(movieData) {
     
     const categories = movie.genres.map(genre => genre.name);
     const ageRating = getAgeRating(releaseDates);
-    const isAdultContent = ageRating === '18';
+    const isAdultContent = ageRating === '19+';
     
     return {
         title: movie.title,
@@ -181,21 +194,23 @@ async function saveMovieToDatabase(movieData) {
             return false; // 중복이므로 저장하지 않음
         }
         
-        await Movie.createMovie(movieData);
-        return true;
+        // 컨트롤러 경유: movie 생성 시 SearchKey도 함께 생성됨
+        const created = await callController(movieController.createMovie, { body: movieData });
+        return !!created; // 성공 시 true
     } catch (error) {
-        console.error(`영화 "${movieData.title}" 저장 실패:`, error.message);
+        console.error(`영화 "${movieData.title}" 저장 실패:`, error.message || error);
         return false;
     }
 }
 
 async function clearExistingMovies() {
     try {
-        const deleteResult = await Movie.deleteMany({});
-        console.log(`기존 영화 데이터 ${deleteResult.deletedCount}개 삭제 완료`);
-        return deleteResult.deletedCount;
+        const movieDel = await Movie.deleteMany({});
+        const keyDel = await SearchKey.deleteMany({});
+        console.log(`기존 영화 ${movieDel.deletedCount}개, 검색키 ${keyDel.deletedCount}개 삭제 완료`);
+        return movieDel.deletedCount;
     } catch (error) {
-        console.error('기존 영화 데이터 삭제 실패:', error.message);
+        console.error('기존 데이터 삭제 실패:', error.message);
         throw error;
     }
 }
