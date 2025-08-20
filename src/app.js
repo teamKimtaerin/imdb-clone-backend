@@ -7,6 +7,7 @@ const userRoutes = require('./routes/user.routes');
 const movieRoutes = require('./routes/movie.routes');
 const reviewRoutes = require('./routes/review.routes');
 const authRoutes = require('./routes/auth.routes');
+const searchRoutes = require('./routes/search.routes');
 
 
 const app = express();
@@ -23,6 +24,7 @@ app.use('/api/movies', movieRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/search', searchRoutes);
 
 app.get('/', (req, res) => {
     res.json({
@@ -39,6 +41,7 @@ app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).send({error: 'Something went wrong!'});
 })
+
 
 module.exports = app;
 
