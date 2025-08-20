@@ -18,13 +18,56 @@ const fuseOptions = {
   useExtendedSearch: true,
 };
 
+// ---- helpers (file-scope) -------------------------------------------------
+const safeJamo = (item) => (item?.key_jamo_full || toJamoFull(item?.key_display || ""));
+const safeNorm = (item) => (item?.key_norm || norm(item?.key_display || ""));
+const sourceRank = { norm: 0, jamo: 1, initials: 2, display: 3, other: 9 };
+const baseScoreMap = { norm: 0.10, jamo: 0.20, initials: 0.30, display: 0.40, other: 0.90 };
+
+function pushUnique(arr, merged, seenComp) {
+  for (const d of arr) {
+    const comp = `${d.key_type || 'unknown'}::${d.key_display}`;
+    if (seenComp.has(comp)) continue;
+    seenComp.add(comp);
+    merged.push(d);
+  }
+}
+
+function pushFuseUnique(results, acc, need) {
+  const seen = new Set(acc.map((r) => r.item.key_display));
+  for (const r of results) {
+    if (seen.has(r.item.key_display)) continue;
+    acc.push(r);
+    seen.add(r.item.key_display);
+    if (acc.length >= need) break;
+  }
+}
+
+function chooseBestSource(c, qn, qj, qi, rawQuery) {
+  if (safeNorm(c).startsWith(qn)) return 'norm';
+  if (safeJamo(c).startsWith(qj)) return 'jamo';
+  if (qi && qi.length >= 2 && (c.key_initials || '').startsWith(qi)) return 'initials';
+  if ((c.key_display || '').startsWith(rawQuery)) return 'display';
+  return 'other';
+}
+
+function scoreFromFuse(r, query, qn, qj, qi) {
+  // Fuse score: 0 (best) → 1 (worst)
+  let s = r.score ?? 0.6;
+  const item = r.item;
+  if (safeNorm(item).startsWith(qn)) s -= 0.12;            // 정규화 prefix 보너스
+  if (qj && safeJamo(item).startsWith(qj)) s -= 0.08;      // 자모 prefix 보너스
+  if (qi && (item.key_initials || '').startsWith(qi)) s -= 0.04; // 초성 prefix 보너스
+  if ((item.key_display || '').startsWith(query)) s -= 0.05;     // 표시 prefix 보너스
+  if (s < 0) s = 0;
+  return { key: item.key_display, movieIds: item.movieIds, _score: +s.toFixed(4) };
+}
+// ---------------------------------------------------------------------------
+
 // prefix 후보 + Fuse 재정렬
 async function autocompleteService(query, limit = 10) {
   try {
     console.log("🔍 [search.service.js] 검색 시작:", { query, limit });
-
-    const safeJamo = (item) => (item.key_jamo_full || toJamoFull(item.key_display || ''));
-    const safeNorm = (item) => (item.key_norm || norm(item.key_display || ''));
 
     const qn = norm(query);
 
@@ -64,21 +107,11 @@ async function autocompleteService(query, limit = 10) {
       reInit ? SearchKey.find({ key_initials: reInit }).limit(CAP).lean() : Promise.resolve([]),
     ]);
 
-    // 우선순위 순서로 중복 제거 병합 (key_type + key_display 기준)
     const seenComp = new Set();
     const merged = [];
-    const pushUnique = (arr) => {
-      for (const d of arr) {
-        const comp = `${d.key_type || 'unknown'}::${d.key_display}`;
-        if (seenComp.has(comp)) continue;
-        seenComp.add(comp);
-        merged.push(d);
-      }
-    };
-    pushUnique(normDocs);
-    pushUnique(jamoDocs);
-    pushUnique(initDocs);
-
+    pushUnique(normDocs, merged, seenComp);
+    pushUnique(jamoDocs, merged, seenComp);
+    pushUnique(initDocs, merged, seenComp);
     const candidates = merged;
 
     if (candidates.length === 0) {
@@ -99,72 +132,31 @@ async function autocompleteService(query, limit = 10) {
     // Fuse 재정렬(오타 허용)
     const fuse = new Fuse(candidates, fuseOptions);
 
-    // 1) 키별 시작 앵커 우선 (norm → jamo → initials → display), Fuse 점수 활용
-    const pushFuse = (arr, acc, need) => {
-      const seen = new Set(acc.map((r) => r.item.key_display));
-      for (const r of arr) {
-        if (seen.has(r.item.key_display)) continue;
-        acc.push(r);
-        seen.add(r.item.key_display);
-        if (acc.length >= need) break;
-      }
-    };
-
     let fuseResults = [];
-    if (qn) pushFuse(fuse.search({ key_norm: "^" + qn }, { limit }), fuseResults, limit);
+    if (qn) pushFuseUnique(fuse.search({ key_norm: "^" + qn }, { limit }), fuseResults, limit);
     if (fuseResults.length < limit && qj && qj.length >= 2) {
-      pushFuse(fuse.search({ key_jamo_full: "^" + qj }, { limit }), fuseResults, limit);
+      pushFuseUnique(fuse.search({ key_jamo_full: "^" + qj }, { limit }), fuseResults, limit);
     }
     if (fuseResults.length < limit && qi && qi.length >= 2) {
-      pushFuse(fuse.search({ key_initials: "^" + qi }, { limit }), fuseResults, limit);
+      pushFuseUnique(fuse.search({ key_initials: "^" + qi }, { limit }), fuseResults, limit);
     }
     if (fuseResults.length < limit) {
-      pushFuse(fuse.search({ key_display: "^" + query }, { limit }), fuseResults, limit);
+      pushFuseUnique(fuse.search({ key_display: "^" + query }, { limit }), fuseResults, limit);
     }
-    // 2) 부족하면 일반 fuzzy로 보충
     if (fuseResults.length < limit) {
-      pushFuse(fuse.search(query, { limit }), fuseResults, limit);
+      pushFuseUnique(fuse.search(query, { limit }), fuseResults, limit);
     }
 
-    // 3) 후처리: 가중치 재점수화 (작을수록 좋게)
-    const scored = fuseResults.map((r) => {
-      // Fuse score: 0 (best) → 1 (worst)
-      let s = r.score ?? 0.6;
-      const item = r.item;
-
-      // 소폭 보정: 접두 매치는 보너스(감점). 과도한 덮어쓰기 금지.
-      if (safeNorm(item).startsWith(qn)) s -= 0.12;            // 정규화 prefix 보너스
-      if (qj && safeJamo(item).startsWith(qj)) s -= 0.08;      // 자모 prefix 보너스
-      if (qi && (item.key_initials || '').startsWith(qi)) s -= 0.04; // 초성 prefix 보너스
-      if ((item.key_display || '').startsWith(query)) s -= 0.05;     // 표시 prefix 보너스
-
-      if (s < 0) s = 0;
-      return { key: item.key_display, movieIds: item.movieIds, _score: +s.toFixed(4) };
-    });
+    const scored = fuseResults.map((r) => scoreFromFuse(r, query, qn, qj, qi));
 
     // 4) 후보 보충(중복 제외): 각 후보의 최고 매치 소스에 따른 점수로 일괄 보충
     if (scored.length < limit) {
       const seen = new Set(scored.map((x) => x.key));
-      const sourceRank = { norm: 0, jamo: 1, initials: 2, display: 3, other: 9 };
-      const baseScoreMap = { norm: 0.10, jamo: 0.20, initials: 0.30, display: 0.40, other: 0.90 };
 
-      // 후보별 최고 소스 계산
-      const chooseBestSource = (c) => {
-        const byNorm = safeNorm(c).startsWith(qn);
-        const byJamo = safeJamo(c).startsWith(qj);
-        const byInit = qi && qi.length >= 2 && (c.key_initials || '').startsWith(qi);
-        if (byNorm) return 'norm';
-        if (byJamo) return 'jamo';
-        if (byInit) return 'initials';
-        if ((c.key_display || '').startsWith(query)) return 'display';
-        return 'other';
-      };
-
-      // 모든 candidates를 순회하며 우선순위에 따라 추가
       const pending = [];
       for (const c of candidates) {
         if (seen.has(c.key_display)) continue;
-        const src = chooseBestSource(c);
+        const src = chooseBestSource(c, qn, qj, qi, query);
         const base = baseScoreMap[src] ?? 0.90;
         const eps = (src === 'norm' ? 0.0001 : src === 'jamo' ? 0.0002 : src === 'initials' ? 0.0003 : 0.0009);
         pending.push({ key: c.key_display, movieIds: c.movieIds, _score: base + eps, _source: src });
@@ -187,8 +179,6 @@ async function autocompleteService(query, limit = 10) {
       }
     }
 
-    scored.sort((a, b) => a._score - b._score);
-    const sourceRank = { norm: 0, jamo: 1, initials: 2, display: 3, other: 9 };
     scored.sort((a, b) => {
       if (a._score !== b._score) return a._score - b._score;
       const ra = sourceRank[a._source || 'other'] ?? 9;
