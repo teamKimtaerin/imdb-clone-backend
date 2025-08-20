@@ -18,6 +18,7 @@ const movieSchema = new mongoose.Schema({
   cast: { type: [castSchema], default: [] },
   director: { type: String },
   poster_url: { type: String },
+  age_rating: { type: String, default: 'ALL' }, // 시청 등급: ALL, 12, 15, 18 등
   created_at: { type: Date, default: Date.now }
 });
 
@@ -56,7 +57,11 @@ movieSchema.statics.getMovieByTitle = async function(title) {
 
 movieSchema.statics.getMovieByCategories = async function(categories) {
   try {
-    return await this.find({ categories: { $in: categories } }).sort({ created_at: -1 });
+    // 기존: 카테고리 중 하나라도 포함하는 영화 검색 (OR 조건)
+    // return await this.find({ categories: { $in: categories } }).sort({ created_at: -1 });
+    
+    // 수정: 모든 카테고리를 포함하는 영화만 검색 (AND 조건)
+    return await this.find({ categories: { $all: categories } }).sort({ created_at: -1 });
   } catch (error) {
     throw error;
   }
@@ -65,6 +70,30 @@ movieSchema.statics.getMovieByCategories = async function(categories) {
 movieSchema.statics.getMovieByRecent = async function(limit = 10) {
   try {
     return await this.find().sort({ created_at: -1 }).limit(limit);
+  } catch (error) {
+    throw error;
+  }
+};
+
+movieSchema.statics.getMoviesWithPagination = async function(query = {}, sortOption = {}, skip = 0, limit = 20) {
+  try {
+    if (sortOption.$expr) {
+      // MongoDB aggregation을 사용한 복잡한 정렬
+      const pipeline = [
+        { $match: query },
+        { $addFields: { 
+          calculatedSort: sortOption.$expr 
+        }},
+        { $sort: { calculatedSort: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+        { $unset: "calculatedSort" }
+      ];
+      return await this.aggregate(pipeline);
+    } else {
+      // 일반 정렬
+      return await this.find(query).sort(sortOption).skip(skip).limit(limit);
+    }
   } catch (error) {
     throw error;
   }
