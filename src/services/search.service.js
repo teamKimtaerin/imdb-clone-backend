@@ -77,6 +77,8 @@ async function autocompleteService(query, limit = 10) {
 
     const qj = toJamoFull(query); // 전체 자모열
     const qi = isKoreanQuery(query) ? toInitials(query) : null;
+    // debug: verify normalization & jamo handling (remove if too noisy)
+    console.log("🧪 [search.service.js] q-values", { qn, qj, qi });
 
     const conds = [
       { key_norm: { $regex: "^" + escapeRegex(qn) } },
